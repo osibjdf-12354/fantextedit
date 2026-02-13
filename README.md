@@ -66,4 +66,5 @@ Bundle output path:
 
 - Build on Windows for the most stable installer output (`.msi` / `.exe`)
 - Install Visual Studio Build Tools (Desktop development with C++)
-- WebView2 runtime is required (included by default in modern Windows 10/11)
+- `webviewInstallMode` is set to `downloadBootstrapper` so WebView2 bootstrap install is supported on Windows 10/11
+- CI workflow (`.github/workflows/windows-compat.yml`) builds installers on both `windows-2019` and `windows-2022`

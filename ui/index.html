@@ -9,19 +9,73 @@
   <body>
     <div class="noise-layer" aria-hidden="true"></div>
     <div class="app-shell">
-      <header class="toolbar panel">
-        <div class="toolbar-left">
-          <button id="tab-editor" class="chip" type="button"></button>
-          <button id="tab-settings" class="chip" type="button"></button>
-        </div>
-        <div class="toolbar-actions">
-          <button id="action-new" type="button"></button>
-          <button id="action-open-text" type="button"></button>
-          <button id="action-save-text" type="button"></button>
-          <button id="action-load-project" type="button"></button>
-          <button id="action-save-project" type="button"></button>
-          <button id="action-insert-image" type="button"></button>
-        </div>
+      <header class="menu-bar panel">
+        <nav class="menu-strip" aria-label="Application menu">
+          <div class="menu-group" id="menu-file-group">
+            <button id="menu-file-trigger" class="menu-trigger" type="button"></button>
+            <div id="menu-file-panel" class="menu-panel">
+              <button id="action-new" type="button"></button>
+              <button id="action-open-text" type="button"></button>
+              <button id="action-save-text" type="button"></button>
+              <button id="action-load-project" type="button"></button>
+              <button id="action-save-project" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-edit-group">
+            <button id="menu-edit-trigger" class="menu-trigger" type="button"></button>
+            <div class="menu-panel">
+              <button id="action-undo" type="button"></button>
+              <button id="action-redo" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-find-group">
+            <button id="menu-find-trigger" class="menu-trigger" type="button"></button>
+            <div class="menu-panel">
+              <button id="action-find" type="button"></button>
+              <button id="action-find-next" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-insert-group">
+            <button id="menu-insert-trigger" class="menu-trigger" type="button"></button>
+            <div id="menu-insert-panel" class="menu-panel">
+              <button id="action-insert-image" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-encoding-group">
+            <button id="menu-encoding-trigger" class="menu-trigger" type="button"></button>
+            <div class="menu-panel">
+              <button id="action-encoding-utf8" type="button"></button>
+              <button id="action-encoding-utf8-bom" type="button"></button>
+              <button id="action-encoding-utf16le" type="button"></button>
+              <button id="action-encoding-utf16be" type="button"></button>
+              <button id="action-encoding-euckr" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-settings-group">
+            <button id="menu-settings-trigger" class="menu-trigger" type="button"></button>
+          </div>
+
+          <div class="menu-group" id="menu-window-group">
+            <button id="menu-window-trigger" class="menu-trigger" type="button"></button>
+            <div class="menu-panel">
+              <button id="action-open-editor" type="button"></button>
+              <button id="action-open-settings" type="button"></button>
+            </div>
+          </div>
+
+          <div class="menu-group" id="menu-help-group">
+            <button id="menu-help-trigger" class="menu-trigger" type="button"></button>
+            <div class="menu-panel">
+              <button id="action-help-placeholder" type="button" disabled></button>
+            </div>
+          </div>
+        </nav>
+
       </header>
 
       <main id="layout" class="layout">

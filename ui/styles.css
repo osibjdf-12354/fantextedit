@@ -43,6 +43,7 @@ body {
 .app-shell {
   position: relative;
   z-index: 1;
+  overflow: visible;
   max-width: 1460px;
   margin: 0 auto;
   padding: 18px;
@@ -61,17 +62,99 @@ body {
   backdrop-filter: blur(6px);
 }
 
-.toolbar {
-  padding: 10px;
+.menu-bar {
+  position: relative;
+  z-index: 40;
+  overflow: visible;
+  padding: 6px 8px 10px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
-.toolbar-left,
-.toolbar-actions {
+.menu-strip {
   display: flex;
-  gap: 8px;
+  gap: 2px;
+  align-items: center;
   flex-wrap: wrap;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid rgba(31, 52, 61, 0.12);
+}
+
+.menu-group {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.menu-group.open {
+  z-index: 41;
+}
+
+.menu-trigger {
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.menu-trigger:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.menu-group.open .menu-trigger {
+  border-color: rgba(188, 75, 43, 0.45);
+  background: var(--accent-soft);
+}
+
+.menu-trigger.active {
+  border-color: rgba(188, 75, 43, 0.45);
+  background: rgba(255, 236, 225, 0.72);
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 120;
+  min-width: 228px;
+  display: none;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(31, 52, 61, 0.2);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 12px 24px rgba(31, 52, 61, 0.2);
+}
+
+.menu-group.open .menu-panel {
+  display: grid;
+  gap: 4px;
+}
+
+.menu-panel button {
+  width: 100%;
+  text-align: left;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.menu-panel button:disabled,
+.menu-panel button:disabled:hover {
+  opacity: 0.58;
+  cursor: default;
+  transform: none;
+  border-color: rgba(31, 52, 61, 0.14);
+  background: rgba(247, 248, 246, 0.92);
+}
+
+.menu-panel button.active {
+  border-color: rgba(188, 75, 43, 0.45);
+  background: var(--accent-soft);
 }
 
 button,
@@ -192,6 +275,10 @@ textarea {
   animation: pop-in 220ms ease;
 }
 
+.outline-item[data-depth] {
+  padding-left: calc(12px + var(--depth, 0) * 18px);
+}
+
 .outline-item.active {
   border-color: rgba(188, 75, 43, 0.5);
   background: var(--accent-soft);
@@ -206,6 +293,8 @@ textarea {
   border: 1px solid rgba(31, 52, 61, 0.22);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 12px 24px rgba(31, 52, 61, 0.2);
+  display: grid;
+  gap: 4px;
 }
 
 .outline-context-delete {
@@ -216,6 +305,48 @@ textarea {
 .editor-grid {
   display: grid;
   gap: 14px;
+}
+
+.shortcut-settings {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(32, 53, 60, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.shortcut-title {
+  font-size: 17px;
+  margin-bottom: 0;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 230px) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.shortcut-label {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.shortcut-input {
+  cursor: pointer;
+  user-select: all;
+}
+
+.shortcut-clear,
+.shortcut-reset {
+  border-radius: 9px;
+  padding: 8px 10px;
 }
 
 .format-row {
@@ -349,9 +480,30 @@ textarea {
 }
 
 @media (max-width: 980px) {
+  .menu-bar {
+    padding: 6px;
+    gap: 5px;
+  }
+
+  .menu-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 8px;
+  }
+
   .layout,
   .layout.settings-mode {
     grid-template-columns: 1fr;
+  }
+
+  .shortcut-row {
+    grid-template-columns: 1fr;
+  }
+
+  .shortcut-clear,
+  .shortcut-reset {
+    width: 100%;
   }
 
   .size-row {

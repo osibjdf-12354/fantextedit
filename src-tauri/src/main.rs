@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use encoding_rs::{EUC_KR, UTF_16BE, UTF_16LE, UTF_8};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +43,8 @@ enum Block {
         source_name: Option<String>,
         #[serde(default)]
         title: Option<String>,
+        #[serde(default)]
+        children: Vec<Block>,
     },
     Image {
         path: String,
@@ -50,6 +53,8 @@ enum Block {
         data_url: Option<String>,
         #[serde(default)]
         title: Option<String>,
+        #[serde(default)]
+        children: Vec<Block>,
     },
 }
 
@@ -73,6 +78,7 @@ struct TextFileLoadResult {
     path: String,
     title: String,
     content: String,
+    encoding: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -102,6 +108,7 @@ fn paragraph_block(text: String, source_name: Option<String>, title: Option<Stri
         style: TextStyleState::default(),
         source_name,
         title,
+        children: Vec::new(),
     }
 }
 
@@ -147,15 +154,35 @@ fn ensure_document_has_block(document: &mut Document) {
     }
 }
 
-fn hydrate_image_blocks(document: &mut Document) {
-    for block in &mut document.blocks {
-        if let Block::Image { path, data_url, .. } = block {
+fn hydrate_image_block(block: &mut Block) {
+    match block {
+        Block::Paragraph { children, .. } => {
+            for child in children {
+                hydrate_image_block(child);
+            }
+        }
+        Block::Image {
+            path,
+            data_url,
+            children,
+            ..
+        } => {
             if data_url.is_none() && !path.trim().is_empty() {
                 if let Ok(encoded) = image_data_url(Path::new(path)) {
                     *data_url = Some(encoded);
                 }
             }
+
+            for child in children {
+                hydrate_image_block(child);
+            }
         }
+    }
+}
+
+fn hydrate_image_blocks(document: &mut Document) {
+    for block in &mut document.blocks {
+        hydrate_image_block(block);
     }
 }
 
@@ -259,20 +286,143 @@ fn html_to_text(input: &str) -> String {
     normalized.trim().to_owned()
 }
 
-fn document_to_text(document: &Document) -> String {
-    let mut output = String::new();
-    for block in &document.blocks {
-        match block {
-            Block::Paragraph { text, .. } => {
-                output.push_str(&html_to_text(text));
-                output.push('\n');
+fn append_block_text(block: &Block, output: &mut String) {
+    match block {
+        Block::Paragraph { text, children, .. } => {
+            output.push_str(&html_to_text(text));
+            output.push('\n');
+            for child in children {
+                append_block_text(child, output);
             }
-            Block::Image { path, .. } => {
-                output.push_str(&format!("[image: {path}]\n"));
+        }
+        Block::Image { path, children, .. } => {
+            output.push_str(&format!("[image: {path}]\n"));
+            for child in children {
+                append_block_text(child, output);
             }
         }
     }
+}
+
+fn document_to_text(document: &Document) -> String {
+    let mut output = String::new();
+    for block in &document.blocks {
+        append_block_text(block, &mut output);
+    }
     output
+}
+
+fn normalize_text_encoding_label(requested: Option<String>) -> String {
+    let raw = requested.unwrap_or_else(|| "utf-8".to_owned());
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "utf-8" | "utf8" => "utf-8".to_owned(),
+        "utf-8-bom" | "utf8-bom" | "utf8bom" => "utf-8-bom".to_owned(),
+        "utf-16le" | "utf16le" | "utf-16" | "utf16" => "utf-16le".to_owned(),
+        "utf-16be" | "utf16be" => "utf-16be".to_owned(),
+        "euc-kr" | "cp949" | "windows-949" | "ms949" => "euc-kr".to_owned(),
+        _ => "utf-8".to_owned(),
+    }
+}
+
+fn decode_text_bytes(bytes: &[u8], encoding: &str) -> Result<String, String> {
+    const UTF8_BOM: &[u8; 3] = b"\xEF\xBB\xBF";
+    const UTF16_LE_BOM: &[u8; 2] = b"\xFF\xFE";
+    const UTF16_BE_BOM: &[u8; 2] = b"\xFE\xFF";
+
+    let (decoded, had_errors) = match encoding {
+        "utf-8" => {
+            let payload = if bytes.starts_with(UTF8_BOM) {
+                &bytes[UTF8_BOM.len()..]
+            } else {
+                bytes
+            };
+            UTF_8.decode_without_bom_handling(payload)
+        }
+        "utf-8-bom" => {
+            let payload = if bytes.starts_with(UTF8_BOM) {
+                &bytes[UTF8_BOM.len()..]
+            } else {
+                bytes
+            };
+            UTF_8.decode_without_bom_handling(payload)
+        }
+        "utf-16le" => {
+            let payload = if bytes.starts_with(UTF16_LE_BOM) {
+                &bytes[UTF16_LE_BOM.len()..]
+            } else {
+                bytes
+            };
+            UTF_16LE.decode_without_bom_handling(payload)
+        }
+        "utf-16be" => {
+            let payload = if bytes.starts_with(UTF16_BE_BOM) {
+                &bytes[UTF16_BE_BOM.len()..]
+            } else {
+                bytes
+            };
+            UTF_16BE.decode_without_bom_handling(payload)
+        }
+        "euc-kr" => EUC_KR.decode_without_bom_handling(bytes),
+        _ => UTF_8.decode_without_bom_handling(bytes),
+    };
+
+    if had_errors {
+        return Err(format!(
+            "Selected encoding '{encoding}' could not decode this text without replacement characters"
+        ));
+    }
+
+    Ok(decoded.into_owned())
+}
+
+fn encode_text_content(content: &str, encoding: &str) -> Result<Vec<u8>, String> {
+    const UTF8_BOM: &[u8; 3] = b"\xEF\xBB\xBF";
+    const UTF16_LE_BOM: &[u8; 2] = b"\xFF\xFE";
+    const UTF16_BE_BOM: &[u8; 2] = b"\xFE\xFF";
+
+    match encoding {
+        "utf-8" => Ok(content.as_bytes().to_vec()),
+        "utf-8-bom" => {
+            let mut output = Vec::with_capacity(UTF8_BOM.len() + content.len());
+            output.extend_from_slice(UTF8_BOM);
+            output.extend_from_slice(content.as_bytes());
+            Ok(output)
+        }
+        "utf-16le" => {
+            let (encoded, _used, had_errors) = UTF_16LE.encode(content);
+            if had_errors {
+                return Err("Text cannot be represented in UTF-16 LE".to_owned());
+            }
+
+            let mut output = Vec::with_capacity(UTF16_LE_BOM.len() + encoded.len());
+            output.extend_from_slice(UTF16_LE_BOM);
+            output.extend_from_slice(encoded.as_ref());
+            Ok(output)
+        }
+        "utf-16be" => {
+            let (encoded, _used, had_errors) = UTF_16BE.encode(content);
+            if had_errors {
+                return Err("Text cannot be represented in UTF-16 BE".to_owned());
+            }
+
+            let mut output = Vec::with_capacity(UTF16_BE_BOM.len() + encoded.len());
+            output.extend_from_slice(UTF16_BE_BOM);
+            output.extend_from_slice(encoded.as_ref());
+            Ok(output)
+        }
+        "euc-kr" => {
+            let (encoded, _used, had_errors) = EUC_KR.encode(content);
+            if had_errors {
+                return Err(
+                    "Text contains characters that cannot be encoded as EUC-KR (CP949)"
+                        .to_owned(),
+                );
+            }
+
+            Ok(encoded.into_owned())
+        }
+        _ => Ok(content.as_bytes().to_vec()),
+    }
 }
 
 fn slugify_title(input: &str) -> String {
@@ -464,7 +614,7 @@ async fn load_startup_document() -> Result<Option<StartupLoadResult>, String> {
 }
 
 #[tauri::command]
-async fn open_text_file() -> Result<Option<TextFileLoadResult>, String> {
+async fn open_text_file(encoding: Option<String>) -> Result<Option<TextFileLoadResult>, String> {
     let Some(path) = FileDialog::new()
         .add_filter("Text", &["txt", "md"])
         .pick_file()
@@ -472,22 +622,34 @@ async fn open_text_file() -> Result<Option<TextFileLoadResult>, String> {
         return Ok(None);
     };
 
+    let selected_encoding = normalize_text_encoding_label(encoding);
     let path_for_read = path.clone();
     let path_label = path.display().to_string();
-    let content = tauri::async_runtime::spawn_blocking(move || fs::read_to_string(&path_for_read))
-        .await
-        .map_err(|error| format!("Background task failed: {error}"))?
-        .map_err(|error| format!("Failed to read text file '{}': {error}", path_label))?;
+    let encoding_for_read = selected_encoding.clone();
+    let content = tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        let bytes = fs::read(&path_for_read)
+            .map_err(|error| format!("Failed to read text file '{}': {error}", path_label))?;
+        decode_text_bytes(&bytes, &encoding_for_read).map_err(|error| {
+            format!(
+                "Failed to decode text file '{}' with encoding '{}': {error}",
+                path_for_read.display(),
+                encoding_for_read
+            )
+        })
+    })
+    .await
+    .map_err(|error| format!("Background task failed: {error}"))??;
 
     Ok(Some(TextFileLoadResult {
         path: path.display().to_string(),
         title: file_stem_or_untitled(&path),
         content,
+        encoding: selected_encoding,
     }))
 }
 
 #[tauri::command]
-async fn save_text_file(document: Document) -> Result<Option<String>, String> {
+async fn save_text_file(document: Document, encoding: Option<String>) -> Result<Option<String>, String> {
     let Some(path) = FileDialog::new()
         .set_file_name("document.txt")
         .add_filter("Text", &["txt"])
@@ -497,12 +659,17 @@ async fn save_text_file(document: Document) -> Result<Option<String>, String> {
     };
 
     let content = document_to_text(&document);
+    let selected_encoding = normalize_text_encoding_label(encoding);
     let path_for_write = path.clone();
     let path_label = path.display().to_string();
-    tauri::async_runtime::spawn_blocking(move || fs::write(&path_for_write, content))
-        .await
-        .map_err(|error| format!("Background task failed: {error}"))?
-        .map_err(|error| format!("Failed to write text file '{}': {error}", path_label))?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let bytes = encode_text_content(&content, &selected_encoding)?;
+        fs::write(&path_for_write, bytes)
+            .map_err(|error| format!("Failed to write text file '{}': {error}", path_label))?;
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("Background task failed: {error}"))??;
 
     Ok(Some(path.display().to_string()))
 }
@@ -531,7 +698,28 @@ async fn pick_image_file() -> Result<Option<Block>, String> {
         caption: String::new(),
         data_url: Some(data_url),
         title,
+        children: Vec::new(),
     }))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn load_image_data_url(path: String) -> Result<Option<String>, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let image_path = PathBuf::from(trimmed);
+    if !image_path.exists() {
+        return Ok(None);
+    }
+
+    let image_path_for_load = image_path.clone();
+    let data_url = tauri::async_runtime::spawn_blocking(move || image_data_url(&image_path_for_load))
+        .await
+        .map_err(|error| format!("Background task failed: {error}"))??;
+
+    Ok(Some(data_url))
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -599,6 +787,7 @@ fn main() {
             open_text_file,
             save_text_file,
             pick_image_file,
+            load_image_data_url,
             autosave_document,
             load_startup_document,
             save_project,
