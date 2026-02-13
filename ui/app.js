@@ -282,6 +282,7 @@ const state = {
     y: 0
   },
   outlineCollapsed: new Set(),
+  outlineScrollTop: 0,
   find: {
     query: "",
     lastPath: null
@@ -1699,6 +1700,11 @@ function renderOutline() {
   pruneOutlineCollapsedPaths();
   revealOutlineAncestors(state.selectedPath);
 
+  const previousOutlineList = refs.outlinePanel.querySelector(".outline-list");
+  const previousScrollTop = previousOutlineList
+    ? previousOutlineList.scrollTop
+    : state.outlineScrollTop;
+
   const contextPath = Array.isArray(state.outlineMenu.path) ? state.outlineMenu.path : null;
   const contextBlock = contextPath ? getBlockByPath(contextPath) : null;
   const hasContextTarget = Boolean(contextPath);
@@ -1747,6 +1753,12 @@ function renderOutline() {
   });
 
   const outlineList = refs.outlinePanel.querySelector(".outline-list");
+  outlineList.scrollTop = previousScrollTop;
+  state.outlineScrollTop = outlineList.scrollTop;
+  outlineList.addEventListener("scroll", () => {
+    state.outlineScrollTop = outlineList.scrollTop;
+  });
+
   outlineList.addEventListener("contextmenu", (event) => {
     if (!(event.target instanceof Element)) {
       return;

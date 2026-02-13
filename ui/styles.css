@@ -273,7 +273,8 @@ textarea {
 }
 
 .outline-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   min-height: 0;
   overflow: auto;
@@ -282,15 +283,18 @@ textarea {
 
 .outline-item {
   width: 100%;
+  flex: 0 0 42px;
   display: flex;
   align-items: center;
   gap: 8px;
   text-align: left;
-  padding: 10px 12px;
+  height: 42px;
+  padding: 0 12px;
   border-radius: 11px;
   border: 1px solid rgba(31, 52, 61, 0.16);
   background: rgba(255, 255, 255, 0.7);
   animation: pop-in 220ms ease;
+  overflow: hidden;
 }
 
 .outline-item[data-depth] {
@@ -312,6 +316,9 @@ textarea {
 
 .outline-label {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .outline-item.active {
