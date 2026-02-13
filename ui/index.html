@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FanText Tauri Editor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="noise-layer" aria-hidden="true"></div>
+    <div class="app-shell">
+      <header class="toolbar panel">
+        <div class="toolbar-left">
+          <button id="tab-editor" class="chip" type="button"></button>
+          <button id="tab-settings" class="chip" type="button"></button>
+        </div>
+        <div class="toolbar-actions">
+          <button id="action-new" type="button"></button>
+          <button id="action-open-text" type="button"></button>
+          <button id="action-save-text" type="button"></button>
+          <button id="action-load-project" type="button"></button>
+          <button id="action-save-project" type="button"></button>
+          <button id="action-insert-paragraph" type="button"></button>
+          <button id="action-insert-image" type="button"></button>
+          <button id="action-delete-block" type="button"></button>
+        </div>
+      </header>
+
+      <main id="layout" class="layout">
+        <aside id="outline-panel" class="panel"></aside>
+        <section id="content-panel" class="panel"></section>
+      </main>
+
+      <footer id="status-bar" class="status-bar panel"></footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
