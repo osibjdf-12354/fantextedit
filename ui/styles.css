@@ -124,11 +124,23 @@ button:active {
   grid-template-columns: 1fr;
 }
 
+.layout.settings-mode #outline-panel {
+  display: none;
+}
+
+.layout.settings-mode #content-panel {
+  grid-column: 1 / -1;
+}
+
 #outline-panel,
 #content-panel {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+}
+
+#outline-panel {
+  position: relative;
 }
 
 .panel-title {
@@ -185,6 +197,22 @@ textarea {
   background: var(--accent-soft);
 }
 
+.outline-context-menu {
+  position: absolute;
+  z-index: 15;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 52, 61, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(31, 52, 61, 0.2);
+}
+
+.outline-context-delete {
+  width: 100%;
+  text-align: left;
+}
+
 .editor-grid {
   display: grid;
   gap: 14px;
@@ -229,8 +257,9 @@ textarea {
 
 .preview-content {
   white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.62;
   min-height: 80px;
 }
 
@@ -239,7 +268,9 @@ textarea {
   border-radius: 10px;
   border: 1px solid rgba(32, 53, 60, 0.22);
   background: rgba(255, 255, 255, 0.84);
-  padding: 10px 12px;
+  padding: 12px 14px 14px;
+  line-break: strict;
+  font-size: 10pt;
   outline: none;
 }
 

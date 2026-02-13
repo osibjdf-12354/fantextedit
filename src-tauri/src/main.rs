@@ -26,7 +26,7 @@ impl Default for TextStyleState {
             italic: false,
             underline: false,
             strikethrough: false,
-            size: 18.0,
+            size: 10.0,
             heading_level: 0,
         }
     }
@@ -40,12 +40,16 @@ enum Block {
         style: TextStyleState,
         #[serde(default)]
         source_name: Option<String>,
+        #[serde(default)]
+        title: Option<String>,
     },
     Image {
         path: String,
         caption: String,
         #[serde(default)]
         data_url: Option<String>,
+        #[serde(default)]
+        title: Option<String>,
     },
 }
 
@@ -59,7 +63,7 @@ impl Default for Document {
     fn default() -> Self {
         Self {
             title: "Untitled".to_owned(),
-            blocks: vec![paragraph_block(String::new(), None)],
+            blocks: vec![paragraph_block(String::new(), None, None)],
         }
     }
 }
@@ -92,11 +96,12 @@ struct StartupLoadResult {
     document: Document,
 }
 
-fn paragraph_block(text: String, source_name: Option<String>) -> Block {
+fn paragraph_block(text: String, source_name: Option<String>, title: Option<String>) -> Block {
     Block::Paragraph {
         text,
         style: TextStyleState::default(),
         source_name,
+        title,
     }
 }
 
@@ -136,7 +141,9 @@ fn image_data_url(path: &Path) -> Result<String, String> {
 
 fn ensure_document_has_block(document: &mut Document) {
     if document.blocks.is_empty() {
-        document.blocks.push(paragraph_block(String::new(), None));
+        document
+            .blocks
+            .push(paragraph_block(String::new(), None, None));
     }
 }
 
@@ -514,10 +521,16 @@ async fn pick_image_file() -> Result<Option<Block>, String> {
         .await
         .map_err(|error| format!("Background task failed: {error}"))??;
 
+    let title = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_owned());
+
     Ok(Some(Block::Image {
         path: path.display().to_string(),
         caption: String::new(),
         data_url: Some(data_url),
+        title,
     }))
 }
 

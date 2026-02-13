@@ -15,6 +15,8 @@ const translations = {
     paragraph: "문단",
     image: "이미지",
     file: "파일",
+    untitledEntry: "새 문서",
+    untitledParagraph: "문단",
     paragraphEditor: "문단 편집",
     formatting: "서식",
     bold: "굵게",
@@ -40,7 +42,7 @@ const translations = {
     runtimeMissing:
       "Tauri 런타임을 찾을 수 없습니다. 'cargo tauri dev' 또는 'cargo run --manifest-path src-tauri/Cargo.toml'로 실행하세요.",
     statusReady: "준비됨",
-    statusNewDocument: "새 문서를 만들었습니다",
+    statusNewDocument: "새 문서를 추가했습니다",
     statusParagraphInserted: "문단을 추가했습니다",
     statusImageInserted: "이미지를 삽입했습니다",
     statusDeletedBlock: "블록을 삭제했습니다",
@@ -59,6 +61,9 @@ const translations = {
     autosaveIdle: "유휴",
     shortcutPrefix: "단축키",
     shortcutNone: "없음",
+    outlineDeleteAction: "블록 삭제",
+    outlineRightClickHint: "우클릭으로 블록 삭제",
+    outlineRenamePrompt: "문서 제목을 입력하세요",
     statusLanguageUpdated: "언어를 변경했습니다",
     errorPrefix: "오류"
   },
@@ -78,6 +83,8 @@ const translations = {
     paragraph: "Paragraph",
     image: "Image",
     file: "File",
+    untitledEntry: "New Document",
+    untitledParagraph: "Paragraph",
     paragraphEditor: "Paragraph Editor",
     formatting: "Formatting",
     bold: "Bold",
@@ -103,7 +110,7 @@ const translations = {
     runtimeMissing:
       "Tauri runtime not found. Run with 'cargo tauri dev' or 'cargo run --manifest-path src-tauri/Cargo.toml'.",
     statusReady: "Ready",
-    statusNewDocument: "Created a new document",
+    statusNewDocument: "Added a new document entry",
     statusParagraphInserted: "Inserted a paragraph",
     statusImageInserted: "Inserted an image",
     statusDeletedBlock: "Removed block",
@@ -122,6 +129,9 @@ const translations = {
     autosaveIdle: "Idle",
     shortcutPrefix: "Shortcut",
     shortcutNone: "None",
+    outlineDeleteAction: "Delete Block",
+    outlineRightClickHint: "Right-click to delete block",
+    outlineRenamePrompt: "Enter document title",
     statusLanguageUpdated: "Language updated",
     errorPrefix: "Error"
   }
@@ -140,6 +150,12 @@ const state = {
   projectPath: null,
   status: "준비됨",
   statusError: false,
+  outlineMenu: {
+    visible: false,
+    index: null,
+    x: 0,
+    y: 0
+  },
   autosave: {
     timerId: null,
     saving: false,
@@ -158,9 +174,7 @@ const refs = {
   saveText: document.getElementById("action-save-text"),
   loadProject: document.getElementById("action-load-project"),
   saveProject: document.getElementById("action-save-project"),
-  insertParagraph: document.getElementById("action-insert-paragraph"),
   insertImage: document.getElementById("action-insert-image"),
-  deleteBlock: document.getElementById("action-delete-block"),
   layout: document.getElementById("layout"),
   outlinePanel: document.getElementById("outline-panel"),
   contentPanel: document.getElementById("content-panel"),
@@ -172,7 +186,7 @@ function t(key) {
 }
 
 function shortcutHint(shortcut) {
-  return `${t("shortcutPrefix")}: ${shortcut || t("shortcutNone")}`;
+  return shortcut || t("shortcutNone");
 }
 
 function setShortcutTooltip(element, shortcut) {
@@ -196,17 +210,18 @@ function defaultStyle() {
     italic: false,
     underline: false,
     strikethrough: false,
-    size: 18,
+    size: 10,
     heading_level: 0
   };
 }
 
-function makeParagraph(text, sourceName = null) {
+function makeParagraph(text, sourceName = null, title = null) {
   return {
     kind: "paragraph",
     text: normalizeParagraphHtml(text),
     style: defaultStyle(),
-    source_name: sourceName
+    source_name: sourceName,
+    title
   };
 }
 
@@ -216,7 +231,7 @@ function normalizeStyle(style) {
     italic: Boolean(style?.italic),
     underline: Boolean(style?.underline),
     strikethrough: Boolean(style?.strikethrough),
-    size: clampNumber(style?.size, 12, 42, 18),
+    size: clampNumber(style?.size, 6, 72, 10),
     heading_level: clampNumber(style?.heading_level, 0, 1, 0)
   };
 }
@@ -234,7 +249,8 @@ function normalizeBlock(block) {
       kind: "paragraph",
       text: normalizeParagraphHtml(rawContent),
       style: normalizeStyle(block.style),
-      source_name: typeof block.source_name === "string" ? block.source_name : null
+      source_name: typeof block.source_name === "string" ? block.source_name : null,
+      title: typeof block.title === "string" ? block.title : null
     };
   }
 
@@ -243,7 +259,8 @@ function normalizeBlock(block) {
       kind: "image",
       path: typeof block.path === "string" ? block.path : "",
       caption: typeof block.caption === "string" ? block.caption : "",
-      data_url: typeof block.data_url === "string" ? block.data_url : null
+      data_url: typeof block.data_url === "string" ? block.data_url : null,
+      title: typeof block.title === "string" ? block.title : null
     };
   }
 
@@ -374,21 +391,37 @@ function fileNameFromPath(path) {
   return parts[parts.length - 1] || path;
 }
 
-function blockLabel(block, index) {
+function defaultBlockTitle(block, index) {
   if (block.kind === "paragraph") {
     if (block.source_name) {
-      return `${index + 1}. [${t("file")}] ${block.source_name}`;
+      return block.source_name;
     }
-
-    const sample = htmlToPlainText(block.text).slice(0, 400);
-    const preview = sample.replace(/\s+/g, " ").trim().slice(0, 28);
-    if (preview.length === 0) {
-      return `${index + 1}. ${t("paragraph")}`;
-    }
-    return `${index + 1}. ${preview}`;
+    return `${t("untitledEntry")} ${index + 1}`;
   }
 
-  return `${index + 1}. [${t("image")}] ${fileNameFromPath(block.path) || "image"}`;
+  const fileName = fileNameFromPath(block.path);
+  if (fileName) {
+    return fileName;
+  }
+  return `${t("image")} ${index + 1}`;
+}
+
+function blockTitle(block, index) {
+  const manualTitle = typeof block.title === "string" ? block.title.trim() : "";
+  if (manualTitle) {
+    return manualTitle;
+  }
+
+  return defaultBlockTitle(block, index);
+}
+
+function blockLabel(block, index) {
+  const title = blockTitle(block, index);
+  if (block.kind === "image") {
+    return `${index + 1}. [${t("image")}] ${title}`;
+  }
+
+  return `${index + 1}. ${title}`;
 }
 
 function escapeHtml(value) {
@@ -410,10 +443,22 @@ function htmlToPlainText(value) {
   return (container.innerText || "").replace(/\r/g, "");
 }
 
+function convertPxFontSizeToPt(html) {
+  return String(html || "").replace(/font-size\s*:\s*([0-9]*\.?[0-9]+)\s*px/gi, (_, pxValue) => {
+    const px = Number(pxValue);
+    if (!Number.isFinite(px)) {
+      return "font-size: 10pt";
+    }
+
+    const pt = Math.round(px * 0.75 * 100) / 100;
+    return `font-size: ${pt}pt`;
+  });
+}
+
 function normalizeParagraphHtml(value) {
   const raw = String(value || "");
   const hasMarkup = /<\/?[a-z][\s\S]*?>/i.test(raw);
-  return hasMarkup ? raw : plainTextToHtml(raw);
+  return hasMarkup ? convertPxFontSizeToPt(raw) : plainTextToHtml(raw);
 }
 
 async function invokeTauri(command, payload = {}) {
@@ -432,10 +477,7 @@ function renderToolbar() {
   refs.saveText.textContent = t("saveText");
   refs.loadProject.textContent = t("loadProject");
   refs.saveProject.textContent = t("saveProject");
-  refs.insertParagraph.textContent = t("insertParagraph");
   refs.insertImage.textContent = t("insertImage");
-  refs.deleteBlock.textContent = t("deleteBlock");
-  refs.deleteBlock.classList.add("danger");
 
   setShortcutTooltip(refs.tabEditor, null);
   setShortcutTooltip(refs.tabSettings, null);
@@ -444,9 +486,7 @@ function renderToolbar() {
   setShortcutTooltip(refs.saveText, "Ctrl/Cmd+Shift+S");
   setShortcutTooltip(refs.loadProject, "Ctrl/Cmd+Shift+O");
   setShortcutTooltip(refs.saveProject, "Ctrl/Cmd+S");
-  setShortcutTooltip(refs.insertParagraph, "Ctrl/Cmd+Shift+Enter");
   setShortcutTooltip(refs.insertImage, "Ctrl/Cmd+Shift+I");
-  setShortcutTooltip(refs.deleteBlock, "Ctrl/Cmd+Shift+Backspace");
 
   refs.tabEditor.classList.toggle("active", state.tab === "editor");
   refs.tabSettings.classList.toggle("active", state.tab === "settings");
@@ -467,6 +507,31 @@ function renderStatus() {
   `;
 }
 
+function hideOutlineContextMenu() {
+  state.outlineMenu.visible = false;
+  state.outlineMenu.index = null;
+}
+
+function openOutlineContextMenu(index, clientX, clientY) {
+  const panel = refs.outlinePanel;
+  const panelRect = panel.getBoundingClientRect();
+
+  const menuWidth = 170;
+  const menuHeight = 44;
+  const rawX = clientX - panelRect.left + panel.scrollLeft;
+  const rawY = clientY - panelRect.top + panel.scrollTop;
+
+  const minX = panel.scrollLeft + 6;
+  const minY = panel.scrollTop + 6;
+  const maxX = Math.max(minX, panel.scrollLeft + panel.clientWidth - menuWidth - 6);
+  const maxY = Math.max(minY, panel.scrollTop + panel.clientHeight - menuHeight - 6);
+
+  state.outlineMenu.visible = true;
+  state.outlineMenu.index = index;
+  state.outlineMenu.x = Math.max(minX, Math.min(rawX, maxX));
+  state.outlineMenu.y = Math.max(minY, Math.min(rawY, maxY));
+}
+
 function renderOutline() {
   refs.outlinePanel.innerHTML = `
     <h2 class="panel-title">${t("outlineTitle")}</h2>
@@ -484,6 +549,15 @@ function renderOutline() {
         )
         .join("")}
     </div>
+    ${
+      state.outlineMenu.visible && Number.isInteger(state.outlineMenu.index)
+        ? `<div id="outline-context-menu" class="outline-context-menu" style="left:${state.outlineMenu.x}px; top:${state.outlineMenu.y}px;">
+            <button id="outline-context-delete" type="button" class="outline-context-delete danger">${escapeHtml(
+              t("outlineDeleteAction")
+            )}</button>
+          </div>`
+        : ""
+    }
   `;
 
   const titleInput = document.getElementById("document-title");
@@ -493,16 +567,62 @@ function renderOutline() {
   });
 
   refs.outlinePanel.querySelectorAll(".outline-item").forEach((button) => {
+    button.title = t("outlineRightClickHint");
+
     button.addEventListener("click", () => {
+      hideOutlineContextMenu();
       state.selectedBlock = Number(button.dataset.index);
       renderEditor();
       renderOutline();
     });
+
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const index = Number(button.dataset.index);
+      state.selectedBlock = index;
+      openOutlineContextMenu(index, event.clientX, event.clientY);
+      renderEditor();
+      renderOutline();
+    });
+
+    button.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      const index = Number(button.dataset.index);
+      const block = state.document.blocks[index];
+      if (!block) {
+        return;
+      }
+
+      const currentTitle = blockTitle(block, index);
+      const nextTitle = window.prompt(t("outlineRenamePrompt"), currentTitle);
+      if (nextTitle === null) {
+        return;
+      }
+
+      const trimmed = nextTitle.trim();
+      block.title = trimmed.length ? trimmed : null;
+      hideOutlineContextMenu();
+      markDocumentDirty();
+      renderOutline();
+    });
   });
+
+  const contextDeleteButton = document.getElementById("outline-context-delete");
+  if (contextDeleteButton) {
+    setShortcutTooltip(contextDeleteButton, "Ctrl/Cmd+Shift+Backspace");
+    contextDeleteButton.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    contextDeleteButton.addEventListener("click", () => {
+      const targetIndex =
+        Number.isInteger(state.outlineMenu.index) ? state.outlineMenu.index : state.selectedBlock;
+      runActionSafely(() => actionDeleteBlock(targetIndex));
+    });
+  }
 }
 
 function syncParagraphHtml(editor, block) {
-  block.text = editor.innerHTML;
+  block.text = convertPxFontSizeToPt(editor.innerHTML);
   renderOutline();
   markDocumentDirty();
 }
@@ -612,14 +732,18 @@ function renderParagraphEditor(block) {
           <button id="format-strike" type="button">${t("strike")}</button>
           <button id="format-heading" type="button">${t("heading")}</button>
           <select id="format-size" aria-label="${t("size")}">
-            <option value="14">14px</option>
-            <option value="16">16px</option>
-            <option value="18" selected>18px</option>
-            <option value="20">20px</option>
-            <option value="24">24px</option>
-            <option value="28">28px</option>
-            <option value="34">34px</option>
-            <option value="42">42px</option>
+            <option value="8">8pt</option>
+            <option value="9">9pt</option>
+            <option value="10" selected>10pt</option>
+            <option value="11">11pt</option>
+            <option value="12">12pt</option>
+            <option value="14">14pt</option>
+            <option value="16">16pt</option>
+            <option value="18">18pt</option>
+            <option value="20">20pt</option>
+            <option value="24">24pt</option>
+            <option value="28">28pt</option>
+            <option value="36">36pt</option>
           </select>
           <button id="format-clear" type="button">${t("clearFormat")}</button>
         </div>
@@ -635,8 +759,12 @@ function renderParagraphEditor(block) {
   const previewEditable = document.getElementById("paragraph-preview");
   previewEditable.innerHTML = block.text;
   let savedRange = null;
+  let isComposing = false;
 
   const saveRangeFromEditor = () => {
+    if (isComposing) {
+      return;
+    }
     const range = cloneSelectionRangeWithin(previewEditable);
     if (range) {
       savedRange = range;
@@ -644,6 +772,9 @@ function renderParagraphEditor(block) {
   };
 
   const runAndSync = (command, value = null) => {
+    if (isComposing) {
+      return;
+    }
     const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
     applyInlineCommand(previewEditable, command, value, range);
     syncParagraphHtml(previewEditable, block);
@@ -672,7 +803,7 @@ function renderParagraphEditor(block) {
   const applyHeadingStyle = () => {
     const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
     wrapSelectionWithStyle(previewEditable, {
-      fontSize: "1.35em",
+      fontSize: "14pt",
       fontWeight: "700",
       lineHeight: "1.25"
     }, range);
@@ -682,10 +813,10 @@ function renderParagraphEditor(block) {
   document.getElementById("format-heading").addEventListener("click", applyHeadingStyle);
 
   const applySelectedSize = () => {
-    const selectedSize = clampNumber(document.getElementById("format-size").value, 12, 42, 18);
+    const selectedSize = clampNumber(document.getElementById("format-size").value, 6, 72, 10);
     const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
     wrapSelectionWithStyle(previewEditable, {
-      fontSize: `${selectedSize}px`
+      fontSize: `${selectedSize}pt`
     }, range);
     syncParagraphHtml(previewEditable, block);
     saveRangeFromEditor();
@@ -713,6 +844,10 @@ function renderParagraphEditor(block) {
   };
 
   previewEditable.addEventListener("keydown", (event) => {
+    if (isComposing) {
+      return;
+    }
+
     const primaryModifier = event.ctrlKey || event.metaKey;
     if (!primaryModifier || event.altKey) {
       return;
@@ -761,7 +896,20 @@ function renderParagraphEditor(block) {
     }
   });
 
+  previewEditable.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
+
+  previewEditable.addEventListener("compositionend", () => {
+    isComposing = false;
+    syncParagraphHtml(previewEditable, block);
+    saveRangeFromEditor();
+  });
+
   previewEditable.addEventListener("input", () => {
+    if (isComposing) {
+      return;
+    }
     syncParagraphHtml(previewEditable, block);
     saveRangeFromEditor();
   });
@@ -855,6 +1003,7 @@ function renderSettings() {
 
 function renderMainPanel() {
   if (state.tab === "settings") {
+    hideOutlineContextMenu();
     refs.layout.classList.add("settings-mode");
     refs.outlinePanel.innerHTML = "";
     renderSettings();
@@ -919,13 +1068,9 @@ function withErrorHandling(action) {
 }
 
 async function actionNewDocument() {
-  state.document = {
-    title: "Untitled",
-    blocks: [makeParagraph("")]
-  };
-  state.selectedBlock = 0;
-  state.projectPath = null;
-  resetAutosaveTracking();
+  const entryName = `${t("untitledEntry")} ${state.document.blocks.length + 1}`;
+  state.document.blocks.push(makeParagraph("", null, entryName));
+  state.selectedBlock = state.document.blocks.length - 1;
   markDocumentDirty();
   setStatus(t("statusNewDocument"));
   render();
@@ -1005,7 +1150,8 @@ async function actionSaveProject() {
 }
 
 async function actionInsertParagraph() {
-  state.document.blocks.push(makeParagraph(""));
+  const paragraphTitle = `${t("untitledParagraph")} ${state.document.blocks.length + 1}`;
+  state.document.blocks.push(makeParagraph("", null, paragraphTitle));
   state.selectedBlock = state.document.blocks.length - 1;
   markDocumentDirty();
   setStatus(t("statusParagraphInserted"));
@@ -1030,13 +1176,20 @@ async function actionInsertImage() {
   render();
 }
 
-async function actionDeleteBlock() {
-  if (state.document.blocks.length <= 1) {
-    setStatus(t("statusNeedOneBlock"), true);
-    return;
+async function actionDeleteBlock(targetIndex = state.selectedBlock) {
+  const deleteIndex = Math.max(0, Math.min(targetIndex, state.document.blocks.length - 1));
+  state.document.blocks.splice(deleteIndex, 1);
+
+  if (state.document.blocks.length === 0) {
+    state.document.blocks.push(makeParagraph(""));
+    state.selectedBlock = 0;
   }
 
-  state.document.blocks.splice(state.selectedBlock, 1);
+  if (state.selectedBlock > deleteIndex) {
+    state.selectedBlock -= 1;
+  }
+
+  hideOutlineContextMenu();
   ensureSelectedBlock();
   markDocumentDirty();
   setStatus(t("statusDeletedBlock"));
@@ -1067,8 +1220,33 @@ function runActionSafely(action) {
   })();
 }
 
+function handleGlobalPointerDown(event) {
+  if (!state.outlineMenu.visible || state.tab !== "editor") {
+    return;
+  }
+
+  if (!(event.target instanceof Element)) {
+    hideOutlineContextMenu();
+    renderOutline();
+    return;
+  }
+
+  if (event.target.closest("#outline-context-menu") || event.target.closest(".outline-item")) {
+    return;
+  }
+
+  hideOutlineContextMenu();
+  renderOutline();
+}
+
 function handleGlobalShortcuts(event) {
   if (event.defaultPrevented) {
+    return;
+  }
+
+  if (event.key === "Escape" && state.outlineMenu.visible && state.tab === "editor") {
+    hideOutlineContextMenu();
+    renderOutline();
     return;
   }
 
@@ -1130,13 +1308,16 @@ function handleGlobalShortcuts(event) {
 
 function bindStaticEvents() {
   document.addEventListener("keydown", handleGlobalShortcuts);
+  document.addEventListener("pointerdown", handleGlobalPointerDown, true);
 
   refs.tabEditor.addEventListener("click", () => {
+    hideOutlineContextMenu();
     state.tab = "editor";
     render();
   });
 
   refs.tabSettings.addEventListener("click", () => {
+    hideOutlineContextMenu();
     state.tab = "settings";
     render();
   });
@@ -1146,9 +1327,7 @@ function bindStaticEvents() {
   refs.saveText.addEventListener("click", withErrorHandling(actionSaveText));
   refs.loadProject.addEventListener("click", withErrorHandling(actionLoadProject));
   refs.saveProject.addEventListener("click", withErrorHandling(actionSaveProject));
-  refs.insertParagraph.addEventListener("click", withErrorHandling(actionInsertParagraph));
   refs.insertImage.addEventListener("click", withErrorHandling(actionInsertImage));
-  refs.deleteBlock.addEventListener("click", withErrorHandling(actionDeleteBlock));
 }
 
 bindStaticEvents();
