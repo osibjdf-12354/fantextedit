@@ -1991,6 +1991,8 @@ function wrapSelectionWithStyle(editor, styleObject, preferredRange = null) {
 }
 
 function renderParagraphEditor(block) {
+  refs.contentPanel.classList.add("paragraph-mode");
+
   refs.contentPanel.innerHTML = `
     <div class="editor-grid paragraph-editor-grid">
       <div class="format-row format-toolbar">
@@ -2238,6 +2240,8 @@ function renderParagraphEditor(block) {
 }
 
 function renderImageEditor(block) {
+  refs.contentPanel.classList.remove("paragraph-mode");
+
   refs.contentPanel.innerHTML = `
     <div class="editor-grid">
       <h2 class="panel-title">${t("imageEditor")}</h2>
@@ -2315,6 +2319,8 @@ function renderShortcutRows() {
 }
 
 function renderSettings() {
+  refs.contentPanel.classList.remove("paragraph-mode");
+
   refs.contentPanel.innerHTML = `
     <div class="editor-grid">
       <h2 class="panel-title">${t("settingsTitle")}</h2>

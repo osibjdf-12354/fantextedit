@@ -231,6 +231,12 @@ button:active {
   padding: 16px;
 }
 
+#content-panel.paragraph-mode {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 #outline-panel {
   position: relative;
   display: grid;
@@ -399,11 +405,20 @@ textarea {
 }
 
 .paragraph-editor-grid {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
 }
 
 .format-toolbar {
   margin-bottom: 2px;
+}
+
+.format-toolbar #format-size {
+  height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .format-color-picker {
@@ -453,6 +468,14 @@ textarea {
   background: rgba(255, 255, 255, 0.72);
 }
 
+#content-panel.paragraph-mode .preview-card {
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+}
+
 .preview-content {
   white-space: pre-wrap;
   word-break: keep-all;
@@ -474,6 +497,15 @@ textarea {
   overflow-y: auto;
   overflow-x: hidden;
   outline: none;
+}
+
+#content-panel.paragraph-mode .preview-editable {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
 }
 
 .preview-editable:focus {
