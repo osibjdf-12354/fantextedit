@@ -1,70 +1,72 @@
 # FanText Editor (Tauri)
 
-Scrivener-like desktop text editor prototype built with **Tauri + Rust**.
+**Tauri + Rust** 기반의 Scrivener 스타일 데스크톱 텍스트 에디터 프로토타입입니다.
 
-## Current feature set
+## 현재 기능
 
-- Text file load (`.txt`, `.md`)
-- Image insertion (`png`, `jpg`, `jpeg`, `bmp`, `gif`, `webp`, `svg`)
-- Paragraph-level formatting (bold, italic, underline, strike, heading, size)
-- Text export (`.txt`)
-- Project save/load (`.fte`, JSON)
-- Debounced autosave while editing with restore on next launch (`*.autosave.fte`)
-- Settings tab with Korean/English switch (default: Korean)
-- Windows-ready desktop packaging with Tauri bundle
+- 텍스트 파일 불러오기 (`.txt`, `.md`)
+- 이미지 삽입 (`png`, `jpg`, `jpeg`, `bmp`, `gif`, `webp`, `svg`)
+- 문단 단위 서식 (굵게, 기울임, 밑줄, 취소선, 제목, 글자 크기)
+- 텍스트 내보내기 (`.txt`)
+- 프로젝트 저장/불러오기 (`.fte`, JSON)
+- 편집 중 디바운스 자동저장 + 다음 실행 시 복구 (`*.autosave.fte`)
+- 설정 탭 한국어/영어 전환 (기본값: 한국어)
+- 메뉴 단축키 사용자 지정
+- 텍스트 인코딩 선택 (UTF-8, UTF-8 BOM, UTF-16 LE/BE, EUC-KR)
+- Tauri 번들을 통한 Windows 패키징 지원
 
-## Project layout
+## 프로젝트 구조
 
-- `src-tauri/`: Tauri Rust backend and app config
-- `ui/`: HTML/CSS/JS frontend
+- `src-tauri/`: Tauri Rust 백엔드 및 앱 설정
+- `ui/`: HTML/CSS/JS 프런트엔드
 
-## Prerequisites
+## 사전 준비
 
-1. Rust toolchain
+1. Rust 툴체인
 2. Tauri CLI
 
 ```bash
 cargo install tauri-cli --version "^2"
 ```
 
-If `cargo` command is not found in your shell:
+셸에서 `cargo` 명령을 찾지 못하면:
 
 ```bash
 source "$HOME/.cargo/env"
 ```
 
-Linux dev dependencies (Ubuntu/Debian example):
+Linux 개발 의존성 (Ubuntu/Debian 예시):
 
 ```bash
 sudo apt update
 sudo apt install -y pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev
 ```
 
-## Run (dev)
+## 실행 (개발)
 
 ```bash
 cargo tauri dev
 ```
 
-If you want to run without the Tauri CLI:
+Tauri CLI 없이 실행하려면:
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml
 ```
 
-## Build distributables
+## 배포 빌드
 
 ```bash
 cargo tauri build
 ```
 
-Bundle output path:
+번들 출력 경로:
 
 - `src-tauri/target/release/bundle/`
 
-## Windows packaging notes
+## Windows 패키징 참고
 
-- Build on Windows for the most stable installer output (`.msi` / `.exe`)
-- Install Visual Studio Build Tools (Desktop development with C++)
-- `webviewInstallMode` is set to `downloadBootstrapper` so WebView2 bootstrap install is supported on Windows 10/11
-- CI workflow (`.github/workflows/windows-compat.yml`) builds installers on both `windows-2019` and `windows-2022`
+- 가장 안정적인 설치 파일(`.msi` / `.exe`) 생성을 위해 Windows에서 빌드 권장
+- Visual Studio Build Tools(Desktop development with C++) 설치 필요
+- `webviewInstallMode`를 `downloadBootstrapper`로 설정하여 Windows 10/11에서 WebView2 부트스트랩 설치 지원
+- CI 워크플로우 (`.github/workflows/windows-compat.yml`)에서 `windows-2019`, `windows-2022` 모두 설치 파일 빌드 검증
