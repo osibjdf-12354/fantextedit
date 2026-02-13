@@ -1,6 +1,6 @@
 # FanText Editor (Tauri)
 
-**Tauri + Rust** 기반의 Scrivener 스타일 데스크톱 텍스트 에디터 프로토타입입니다.
+**Tauri + Rust** 기반의 데스크톱 텍스트 에디터 프로토타입입니다.
 
 ## 현재 기능
 
