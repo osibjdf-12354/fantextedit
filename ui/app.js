@@ -50,6 +50,9 @@ const translations = {
     underline: "밑줄",
     strike: "취소선",
     heading: "제목",
+    textColor: "글자색",
+    colorCode: "색상 코드",
+    applyColor: "색상 적용",
     paragraphMode: "본문",
     size: "크기",
     text: "텍스트",
@@ -87,6 +90,9 @@ const translations = {
     statusRedo: "다시 실행",
     statusFindFound: "찾기 결과",
     statusFindNotFound: "일치하는 텍스트가 없습니다",
+    statusColorApplied: "글자 색상을 적용했습니다",
+    statusSelectTextForColor: "색상을 적용할 텍스트를 선택하세요",
+    invalidColorCode: "올바른 색상 코드를 입력하세요 (#RRGGBB 또는 #RGB)",
     statusShortcutUpdated: "단축키를 변경했습니다",
     statusShortcutReset: "단축키를 기본값으로 복원했습니다",
     statusShortcutReserved: "편집기 기본 단축키와 겹칠 수 없습니다",
@@ -162,6 +168,9 @@ const translations = {
     underline: "Underline",
     strike: "Strike",
     heading: "Heading",
+    textColor: "Text Color",
+    colorCode: "Color Code",
+    applyColor: "Apply Color",
     paragraphMode: "Paragraph",
     size: "Size",
     text: "Text",
@@ -200,6 +209,9 @@ const translations = {
     statusRedo: "Redo",
     statusFindFound: "Found",
     statusFindNotFound: "No matches found",
+    statusColorApplied: "Applied text color",
+    statusSelectTextForColor: "Select text before applying color",
+    invalidColorCode: "Enter a valid color code (#RRGGBB or #RGB)",
     statusShortcutUpdated: "Updated shortcut",
     statusShortcutReset: "Reset shortcuts to defaults",
     statusShortcutReserved: "This conflicts with fixed editor shortcuts",
@@ -215,12 +227,12 @@ const translations = {
     autosaveIdle: "Idle",
     shortcutPrefix: "Shortcut",
     shortcutNone: "None",
-    outlineDeleteAction: "Delete Block",
-    outlineAddDocumentAction: "Add Document",
-    outlineAddChildAction: "Add Child Document",
-    outlineRenameAction: "Rename",
-    outlineRightClickHint: "Right-click for menu",
-    outlineRenamePrompt: "Enter document title",
+    outlineDeleteAction: "블록 삭제",
+    outlineAddDocumentAction: "새 문서 추가",
+    outlineAddChildAction: "하위 문서 추가",
+    outlineRenameAction: "이름 바꾸기",
+    outlineRightClickHint: "우클릭으로 메뉴 열기",
+    outlineRenamePrompt: "문서 제목을 입력하세요",
     statusLanguageUpdated: "Language updated",
     errorPrefix: "Error"
   }
@@ -257,8 +269,7 @@ const RESERVED_EDITOR_SHORTCUTS = new Set([
   "Mod+B",
   "Mod+I",
   "Mod+U",
-  "Mod+Shift+X",
-  "Mod+Shift+1"
+  "Mod+Shift+X"
 ]);
 
 const state = {
@@ -774,6 +785,29 @@ function clampNumber(value, min, max, fallback) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeHexColor(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const withoutHash = raw.startsWith("#") ? raw.slice(1) : raw;
+  if (/^[0-9a-fA-F]{6}$/.test(withoutHash)) {
+    return `#${withoutHash.toLowerCase()}`;
+  }
+
+  if (/^[0-9a-fA-F]{3}$/.test(withoutHash)) {
+    const expanded = withoutHash
+      .toLowerCase()
+      .split("")
+      .map((char) => `${char}${char}`)
+      .join("");
+    return `#${expanded}`;
+  }
+
+  return null;
 }
 
 function defaultStyle() {
@@ -1714,7 +1748,6 @@ function renderOutline() {
   const showContextMenu = state.outlineMenu.visible && (!hasContextTarget || contextBlock);
 
   refs.outlinePanel.innerHTML = `
-    <h2 class="panel-title">${t("outlineTitle")}</h2>
     <label class="field">
       <span class="field-label">${t("documentTitle")}</span>
       <input id="document-title" type="text" value="${escapeHtml(state.document.title)}" />
@@ -1959,37 +1992,47 @@ function wrapSelectionWithStyle(editor, styleObject, preferredRange = null) {
 
 function renderParagraphEditor(block) {
   refs.contentPanel.innerHTML = `
-    <div class="editor-grid">
-      <h2 class="panel-title">${t("paragraphEditor")}</h2>
-
-      <div class="field">
-        <span class="field-label">${t("formatting")}</span>
-        <div class="format-row">
-          <button id="format-bold" type="button">${t("bold")}</button>
-          <button id="format-italic" type="button">${t("italic")}</button>
-          <button id="format-underline" type="button">${t("underline")}</button>
-          <button id="format-strike" type="button">${t("strike")}</button>
-          <button id="format-heading" type="button">${t("heading")}</button>
-          <select id="format-size" aria-label="${t("size")}">
-            <option value="8">8pt</option>
-            <option value="9">9pt</option>
-            <option value="10" selected>10pt</option>
-            <option value="11">11pt</option>
-            <option value="12">12pt</option>
-            <option value="14">14pt</option>
-            <option value="16">16pt</option>
-            <option value="18">18pt</option>
-            <option value="20">20pt</option>
-            <option value="24">24pt</option>
-            <option value="28">28pt</option>
-            <option value="36">36pt</option>
-          </select>
-          <button id="format-clear" type="button">${t("clearFormat")}</button>
-        </div>
+    <div class="editor-grid paragraph-editor-grid">
+      <div class="format-row format-toolbar">
+        <button id="format-bold" type="button">${t("bold")}</button>
+        <button id="format-italic" type="button">${t("italic")}</button>
+        <button id="format-underline" type="button">${t("underline")}</button>
+        <button id="format-strike" type="button">${t("strike")}</button>
+        <select id="format-size" aria-label="${t("size")}">
+          <option value="8">8pt</option>
+          <option value="9">9pt</option>
+          <option value="10" selected>10pt</option>
+          <option value="11">11pt</option>
+          <option value="12">12pt</option>
+          <option value="14">14pt</option>
+          <option value="16">16pt</option>
+          <option value="18">18pt</option>
+          <option value="20">20pt</option>
+          <option value="24">24pt</option>
+          <option value="28">28pt</option>
+          <option value="36">36pt</option>
+        </select>
+        <input
+          id="format-color-picker"
+          class="format-color-picker"
+          type="color"
+          value="#000000"
+          aria-label="${t("textColor")}" />
+        <input
+          id="format-color-code"
+          class="format-color-code"
+          type="text"
+          inputmode="text"
+          spellcheck="false"
+          value="#000000"
+          maxlength="7"
+          placeholder="#RRGGBB"
+          aria-label="${t("colorCode")}" />
+        <button id="format-color-apply" type="button">${t("applyColor")}</button>
+        <button id="format-clear" type="button">${t("clearFormat")}</button>
       </div>
 
       <div class="preview-card">
-        <div class="field-label">${t("editorArea")}</div>
         <div id="paragraph-preview" class="preview-content preview-editable" contenteditable="true" spellcheck="false"></div>
       </div>
     </div>
@@ -2039,18 +2082,6 @@ function renderParagraphEditor(block) {
     runAndSync("strikeThrough");
   });
 
-  const applyHeadingStyle = () => {
-    const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
-    wrapSelectionWithStyle(previewEditable, {
-      fontSize: "14pt",
-      fontWeight: "700",
-      lineHeight: "1.25"
-    }, range);
-    syncParagraphHtml(previewEditable, block);
-    saveRangeFromEditor();
-  };
-  document.getElementById("format-heading").addEventListener("click", applyHeadingStyle);
-
   const applySelectedSize = () => {
     const selectedSize = clampNumber(document.getElementById("format-size").value, 6, 72, 10);
     const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
@@ -2061,6 +2092,64 @@ function renderParagraphEditor(block) {
     saveRangeFromEditor();
   };
   document.getElementById("format-size").addEventListener("change", applySelectedSize);
+
+  const colorPicker = document.getElementById("format-color-picker");
+  const colorCodeInput = document.getElementById("format-color-code");
+  const colorApplyButton = document.getElementById("format-color-apply");
+
+  const applySelectedColor = (rawColor) => {
+    const normalizedColor = normalizeHexColor(rawColor);
+    if (!normalizedColor) {
+      setStatus(`${t("errorPrefix")}: ${t("invalidColorCode")}`, true);
+      return;
+    }
+
+    const range = cloneSelectionRangeWithin(previewEditable) || savedRange;
+    const changed = wrapSelectionWithStyle(
+      previewEditable,
+      {
+        color: normalizedColor
+      },
+      range
+    );
+    if (!changed) {
+      setStatus(t("statusSelectTextForColor"), true);
+      return;
+    }
+
+    const displayColor = normalizedColor.toUpperCase();
+    colorPicker.value = normalizedColor;
+    colorCodeInput.value = displayColor;
+    syncParagraphHtml(previewEditable, block);
+    saveRangeFromEditor();
+    setStatus(`${t("statusColorApplied")}: ${displayColor}`);
+  };
+
+  colorPicker.addEventListener("change", () => {
+    applySelectedColor(colorPicker.value);
+  });
+
+  colorApplyButton.addEventListener("click", () => {
+    applySelectedColor(colorCodeInput.value);
+  });
+
+  colorCodeInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    applySelectedColor(colorCodeInput.value);
+  });
+
+  colorCodeInput.addEventListener("blur", () => {
+    const normalizedColor = normalizeHexColor(colorCodeInput.value);
+    if (!normalizedColor) {
+      return;
+    }
+    colorPicker.value = normalizedColor;
+    colorCodeInput.value = normalizedColor.toUpperCase();
+  });
+
   document.getElementById("format-clear").addEventListener("click", () => {
     runAndSync("removeFormat");
   });
@@ -2069,8 +2158,10 @@ function renderParagraphEditor(block) {
   setShortcutTooltip(document.getElementById("format-italic"), "Ctrl/Cmd+I");
   setShortcutTooltip(document.getElementById("format-underline"), "Ctrl/Cmd+U");
   setShortcutTooltip(document.getElementById("format-strike"), "Ctrl/Cmd+Shift+X");
-  setShortcutTooltip(document.getElementById("format-heading"), "Ctrl/Cmd+Shift+1");
   setShortcutTooltip(document.getElementById("format-size"), null);
+  setShortcutTooltip(colorPicker, null);
+  setShortcutTooltip(colorCodeInput, null);
+  setShortcutTooltip(colorApplyButton, null);
   setShortcutTooltip(document.getElementById("format-clear"), null);
 
   previewEditable.addEventListener("keydown", (event) => {
@@ -2116,10 +2207,6 @@ function renderParagraphEditor(block) {
       event.preventDefault();
       runAndSync("strikeThrough");
       return;
-    }
-    if (key === "1" && event.shiftKey) {
-      event.preventDefault();
-      applyHeadingStyle();
     }
   });
 

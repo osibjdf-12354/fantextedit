@@ -452,6 +452,46 @@ fn slugify_title(input: &str) -> String {
     }
 }
 
+fn sanitize_file_name(input: &str) -> String {
+    let mut out = String::new();
+    let mut previous_space = false;
+
+    for ch in input.chars() {
+        let is_invalid = matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+            || ch.is_control();
+
+        if is_invalid {
+            continue;
+        }
+
+        if ch.is_whitespace() {
+            if !previous_space && !out.is_empty() {
+                out.push(' ');
+                previous_space = true;
+            }
+            continue;
+        }
+
+        previous_space = false;
+        out.push(ch);
+    }
+
+    let trimmed = out.trim().trim_matches('.').trim();
+    if trimmed.is_empty() {
+        "project".to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+fn default_project_file_name(document: &Document) -> String {
+    let mut base = sanitize_file_name(&document.title);
+    if !base.to_ascii_lowercase().ends_with(".fte") {
+        base.push_str(".fte");
+    }
+    base
+}
+
 fn now_unix_ms() -> u64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_millis() as u64,
@@ -724,11 +764,12 @@ async fn load_image_data_url(path: String) -> Result<Option<String>, String> {
 
 #[tauri::command(rename_all = "snake_case")]
 async fn save_project(document: Document, current_path: Option<String>) -> Result<Option<String>, String> {
+    let default_file_name = default_project_file_name(&document);
     let path = match current_path {
         Some(path) => PathBuf::from(path),
         None => {
             let Some(path) = FileDialog::new()
-                .set_file_name("project.fte")
+                .set_file_name(&default_file_name)
                 .add_filter("FanText project", &["fte"])
                 .save_file()
             else {
