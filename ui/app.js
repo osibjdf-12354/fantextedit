@@ -103,6 +103,7 @@ const translations = {
     shortcutPrefix: "단축키",
     shortcutNone: "없음",
     outlineDeleteAction: "블록 삭제",
+    outlineAddDocumentAction: "새 문서 추가",
     outlineAddChildAction: "하위 문서 추가",
     outlineRenameAction: "이름 바꾸기",
     outlineRightClickHint: "우클릭으로 메뉴 열기",
@@ -215,6 +216,7 @@ const translations = {
     shortcutPrefix: "Shortcut",
     shortcutNone: "None",
     outlineDeleteAction: "Delete Block",
+    outlineAddDocumentAction: "Add Document",
     outlineAddChildAction: "Add Child Document",
     outlineRenameAction: "Rename",
     outlineRightClickHint: "Right-click for menu",
@@ -279,6 +281,7 @@ const state = {
     x: 0,
     y: 0
   },
+  outlineCollapsed: new Set(),
   find: {
     query: "",
     lastPath: null
@@ -878,6 +881,67 @@ function parsePath(pathText) {
     .split(".")
     .map((part) => Number(part))
     .filter((part) => Number.isInteger(part) && part >= 0);
+}
+
+function isOutlineCollapsed(path) {
+  if (!Array.isArray(path) || path.length === 0) {
+    return false;
+  }
+
+  return state.outlineCollapsed.has(serializePath(path));
+}
+
+function setOutlineCollapsed(path, collapsed) {
+  if (!Array.isArray(path) || path.length === 0) {
+    return;
+  }
+
+  const key = serializePath(path);
+  if (collapsed) {
+    state.outlineCollapsed.add(key);
+  } else {
+    state.outlineCollapsed.delete(key);
+  }
+}
+
+function toggleOutlineCollapsed(path) {
+  const nextCollapsed = !isOutlineCollapsed(path);
+  setOutlineCollapsed(path, nextCollapsed);
+  return nextCollapsed;
+}
+
+function pruneOutlineCollapsedPaths() {
+  if (state.outlineCollapsed.size === 0) {
+    return;
+  }
+
+  const next = new Set();
+  state.outlineCollapsed.forEach((pathText) => {
+    const path = parsePath(pathText);
+    const block = getBlockByPath(path);
+    if (!block) {
+      return;
+    }
+
+    const children = Array.isArray(block.children) ? block.children : [];
+    if (children.length === 0) {
+      return;
+    }
+
+    next.add(serializePath(path));
+  });
+
+  state.outlineCollapsed = next;
+}
+
+function revealOutlineAncestors(path) {
+  if (!Array.isArray(path)) {
+    return;
+  }
+
+  for (let depth = 1; depth < path.length; depth += 1) {
+    setOutlineCollapsed(path.slice(0, depth), false);
+  }
 }
 
 function pathsEqual(a, b) {
@@ -1565,8 +1629,9 @@ function openOutlineContextMenu(path, clientX, clientY) {
   const panel = refs.outlinePanel;
   const panelRect = panel.getBoundingClientRect();
 
-  const menuWidth = 170;
-  const menuHeight = 122;
+  const targetExists = Array.isArray(path) && path.length > 0;
+  const menuWidth = targetExists ? 188 : 176;
+  const menuHeight = targetExists ? 162 : 54;
   const rawX = clientX - panelRect.left + panel.scrollLeft;
   const rawY = clientY - panelRect.top + panel.scrollTop;
 
@@ -1607,28 +1672,40 @@ function renderOutlineItems(blocks, parentPath = [], depth = 0) {
       const pathText = serializePath(path);
       const label = blockLabel(block, index);
       const children = Array.isArray(block.children) ? block.children : [];
+      const hasChildren = children.length > 0;
+      const collapsed = hasChildren && isOutlineCollapsed(path);
+      const caretText = hasChildren ? (collapsed ? "▸" : "▾") : "";
 
       return `
         <button
           type="button"
           class="outline-item ${pathsEqual(state.selectedPath, path) ? "active" : ""}"
           data-path="${pathText}"
+          data-has-children="${hasChildren ? "true" : "false"}"
           data-depth="${depth}"
           style="--depth:${depth}"
-        >${escapeHtml(label)}</button>
-        ${children.length > 0 ? renderOutlineItems(children, path, depth + 1) : ""}
+        >
+          <span class="outline-caret ${hasChildren ? "" : "empty"}" aria-hidden="true">${caretText}</span>
+          <span class="outline-label">${escapeHtml(label)}</span>
+        </button>
+        ${hasChildren && !collapsed ? renderOutlineItems(children, path, depth + 1) : ""}
       `;
     })
     .join("");
 }
 
 function renderOutline() {
+  ensureSelectedPath();
+  pruneOutlineCollapsedPaths();
+  revealOutlineAncestors(state.selectedPath);
+
   const contextPath = Array.isArray(state.outlineMenu.path) ? state.outlineMenu.path : null;
   const contextBlock = contextPath ? getBlockByPath(contextPath) : null;
-  if (state.outlineMenu.visible && !contextBlock) {
+  const hasContextTarget = Boolean(contextPath);
+  if (state.outlineMenu.visible && hasContextTarget && !contextBlock) {
     hideOutlineContextMenu();
   }
-  const showContextMenu = state.outlineMenu.visible && contextBlock;
+  const showContextMenu = state.outlineMenu.visible && (!hasContextTarget || contextBlock);
 
   refs.outlinePanel.innerHTML = `
     <h2 class="panel-title">${t("outlineTitle")}</h2>
@@ -1642,15 +1719,22 @@ function renderOutline() {
     ${
       showContextMenu
         ? `<div id="outline-context-menu" class="outline-context-menu" style="left:${state.outlineMenu.x}px; top:${state.outlineMenu.y}px;">
-            <button id="outline-context-add-child" type="button" class="outline-context-delete">${escapeHtml(
-              t("outlineAddChildAction")
+            <button id="outline-context-new-document" type="button" class="outline-context-delete">${escapeHtml(
+              t("outlineAddDocumentAction")
             )}</button>
-            <button id="outline-context-rename" type="button" class="outline-context-delete">${escapeHtml(
-              t("outlineRenameAction")
-            )}</button>
-            <button id="outline-context-delete" type="button" class="outline-context-delete danger">${escapeHtml(
-              t("outlineDeleteAction")
-            )}</button>
+            ${
+              contextBlock
+                ? `<button id="outline-context-add-child" type="button" class="outline-context-delete">${escapeHtml(
+                    t("outlineAddChildAction")
+                  )}</button>
+                   <button id="outline-context-rename" type="button" class="outline-context-delete">${escapeHtml(
+                     t("outlineRenameAction")
+                   )}</button>
+                   <button id="outline-context-delete" type="button" class="outline-context-delete danger">${escapeHtml(
+                     t("outlineDeleteAction")
+                   )}</button>`
+                : ""
+            }
           </div>`
         : ""
     }
@@ -1662,13 +1746,35 @@ function renderOutline() {
     markDocumentDirty();
   });
 
+  const outlineList = refs.outlinePanel.querySelector(".outline-list");
+  outlineList.addEventListener("contextmenu", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    if (event.target.closest(".outline-item")) {
+      return;
+    }
+
+    event.preventDefault();
+    closeTopMenu();
+    openOutlineContextMenu(null, event.clientX, event.clientY);
+    renderOutline();
+  });
+
   refs.outlinePanel.querySelectorAll(".outline-item").forEach((button) => {
     button.title = t("outlineRightClickHint");
 
     button.addEventListener("click", () => {
       closeTopMenu();
       hideOutlineContextMenu();
-      state.selectedPath = parsePath(button.dataset.path);
+      const path = parsePath(button.dataset.path);
+      const hasChildren = button.dataset.hasChildren === "true";
+      if (hasChildren) {
+        toggleOutlineCollapsed(path);
+      }
+
+      state.selectedPath = path;
       renderEditor();
       renderOutline();
     });
@@ -1688,6 +1794,18 @@ function renderOutline() {
       renameBlockAtPath(parsePath(button.dataset.path));
     });
   });
+
+  const contextNewDocumentButton = document.getElementById("outline-context-new-document");
+  if (contextNewDocumentButton) {
+    setShortcutTooltip(contextNewDocumentButton, tooltipShortcutFor("newDocument"));
+    contextNewDocumentButton.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    contextNewDocumentButton.addEventListener("click", () => {
+      hideOutlineContextMenu();
+      runActionSafely(actionNewDocument);
+    });
+  }
 
   const contextAddChildButton = document.getElementById("outline-context-add-child");
   if (contextAddChildButton) {
@@ -2213,6 +2331,7 @@ async function restoreStartupAutosave() {
     state.document = normalizeDocument(restored.document);
     state.projectPath = typeof restored.project_path === "string" ? restored.project_path : null;
     state.selectedPath = [0];
+    state.outlineCollapsed = new Set();
 
     resetAutosaveTracking();
     state.autosave.lastPath =
@@ -2288,6 +2407,7 @@ async function actionOpenText() {
   if (hasOnlyInitialEmptyBlock) {
     state.document.blocks = incomingBlocks;
     state.selectedPath = [0];
+    state.outlineCollapsed = new Set();
   } else {
     const insertIndex = state.document.blocks.length;
     state.document.blocks.push(...incomingBlocks);
@@ -2334,6 +2454,7 @@ async function actionLoadProject() {
   state.document = normalizeDocument(result.document);
   state.projectPath = typeof result.path === "string" ? result.path : null;
   state.selectedPath = [0];
+  state.outlineCollapsed = new Set();
   resetAutosaveTracking();
   setStatus(`${t("statusLoadedProject")}: ${result.path}`);
   render();
@@ -2451,6 +2572,8 @@ async function actionAddChildDocument(targetPath = state.selectedPath) {
   const childTitle = `${t("untitledEntry")} ${children.length + 1}`;
   children.push(makeParagraph("", null, childTitle));
   state.selectedPath = [...targetPath, children.length - 1];
+  setOutlineCollapsed(targetPath, false);
+  revealOutlineAncestors(state.selectedPath);
   hideOutlineContextMenu();
   markDocumentDirty();
   setStatus(t("statusChildAdded"));

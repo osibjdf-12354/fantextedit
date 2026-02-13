@@ -19,12 +19,18 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   color: var(--text-main);
   font-family: "SUIT", "Pretendard", "Noto Sans KR", "Segoe UI Variable", sans-serif;
   background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 .noise-layer {
@@ -50,7 +56,9 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 14px;
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   animation: fade-up 340ms ease;
 }
 
@@ -201,6 +209,7 @@ button:active {
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .layout.settings-mode {
@@ -224,6 +233,9 @@ button:active {
 
 #outline-panel {
   position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .panel-title {
@@ -263,10 +275,16 @@ textarea {
 .outline-list {
   display: grid;
   gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .outline-item {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   padding: 10px 12px;
   border-radius: 11px;
@@ -277,6 +295,23 @@ textarea {
 
 .outline-item[data-depth] {
   padding-left: calc(12px + var(--depth, 0) * 18px);
+}
+
+.outline-caret {
+  flex: 0 0 12px;
+  width: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.outline-caret.empty {
+  opacity: 0;
+}
+
+.outline-label {
+  min-width: 0;
 }
 
 .outline-item.active {
